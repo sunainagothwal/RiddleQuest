@@ -39,7 +39,7 @@ export const STRINGS = {
     noFavorites: "No saved riddles yet. Tap the star while playing to save one!",
   },
   hi: {
-    appName: "पहेली क्वेस्ट",
+    appName: "Dimag Lagao",
     tagline: "एक बार में एक पहेली — अपने दिमाग को तेज़ करो",
     play: "खेलें",
     categories: "श्रेणियाँ",

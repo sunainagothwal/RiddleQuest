@@ -1,10 +1,12 @@
 import React, { useRef, useState } from "react";
 import { View, StyleSheet, Pressable, Animated, Text } from "react-native";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import { LanguageProvider, useLanguage } from "./src/context/LanguageContext";
 import { COLORS } from "./src/theme/theme";
+import AuroraBackground from "./src/components/AuroraBackground";
+import GlassSurface from "./src/components/GlassSurface";
 import GameScreen from "./src/screens/GameScreen";
 import FavoritesScreen from "./src/screens/FavoritesScreen";
 import StatsScreen from "./src/screens/StatsScreen";
@@ -15,15 +17,21 @@ const TABS = [
   { key: "stats", icon: "stats-chart-outline", activeIcon: "stats-chart" },
 ];
 
+// Docked (not floating) so it takes a fixed, predictable slice of the
+// column layout — every screen can size itself against the remaining
+// space with no guesswork about how much bottom padding to leave.
 function TabBar({ active, onChange }) {
   const { t } = useLanguage();
+  const insets = useSafeAreaInsets();
   return (
-    <View style={styles.tabBar}>
-      {TABS.map((tab) => {
-        const isActive = active === tab.key;
-        return <TabButton key={tab.key} tab={tab} isActive={isActive} label={t[tab.key]} onPress={() => onChange(tab.key)} />;
-      })}
-    </View>
+    <GlassSurface radiusTop={24} radiusBottom={0} intensity={50} style={styles.tabBar}>
+      <View style={[styles.tabRow, { paddingBottom: Math.max(insets.bottom, 8) + 6 }]}>
+        {TABS.map((tab) => {
+          const isActive = active === tab.key;
+          return <TabButton key={tab.key} tab={tab} isActive={isActive} label={t[tab.key]} onPress={() => onChange(tab.key)} />;
+        })}
+      </View>
+    </GlassSurface>
   );
 }
 
@@ -40,17 +48,17 @@ function TabButton({ tab, isActive, label, onPress }) {
 
   return (
     <Pressable style={styles.tabButton} onPress={handlePress}>
+      {isActive && <View style={styles.activePill} />}
       <Animated.View style={{ transform: [{ scale }] }}>
         <Ionicons
           name={isActive ? tab.activeIcon : tab.icon}
-          size={24}
+          size={18}
           color={isActive ? COLORS.accent : COLORS.textMuted}
         />
       </Animated.View>
       <Text style={[styles.tabLabel, { color: isActive ? COLORS.accent : COLORS.textMuted }]}>
         {label}
       </Text>
-      {isActive && <View style={styles.activeDot} />}
     </Pressable>
   );
 }
@@ -85,32 +93,31 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <LanguageProvider>
-        <View style={styles.flex}>
+        <AuroraBackground>
           <StatusBar style="light" />
           <RootNavigator />
-        </View>
+        </AuroraBackground>
       </LanguageProvider>
     </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: COLORS.bgBottom },
-  tabBar: {
+  flex: { flex: 1, backgroundColor: "transparent" },
+  tabBar: {},
+  tabRow: {
     flexDirection: "row",
-    backgroundColor: COLORS.card,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.cardBorder,
     paddingTop: 10,
-    paddingBottom: 18,
+    paddingHorizontal: 6,
   },
-  tabButton: { flex: 1, alignItems: "center" },
-  tabLabel: { fontSize: 11, marginTop: 3, fontWeight: "700" },
-  activeDot: {
-    marginTop: 4,
-    width: 4,
-    height: 4,
+  tabButton: { flex: 1, alignItems: "center", paddingVertical: 2 },
+  activePill: {
+    position: "absolute",
+    top: -10,
+    width: 26,
+    height: 3,
     borderRadius: 2,
     backgroundColor: COLORS.accent,
   },
+  tabLabel: { fontSize: 10, marginTop: 3, fontWeight: "700" },
 });

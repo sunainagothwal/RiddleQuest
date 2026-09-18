@@ -1,7 +1,8 @@
 import React, { useState, useCallback, useMemo } from "react";
-import { View, Text, StyleSheet, ScrollView, Animated } from "react-native";
+import { View, Text, StyleSheet, Animated } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { COLORS } from "../theme/theme";
+import { useAudioPlayer } from "expo-audio";
+import { COLORS, SPACING } from "../theme/theme";
 import { useLanguage } from "../context/LanguageContext";
 import { useRiddleGame } from "../hooks/useRiddleGame";
 import { RIDDLES } from "../data/riddles";
@@ -11,7 +12,12 @@ import AnswerOptions from "../components/AnswerOptions";
 import CollapsiblePanel from "../components/CollapsiblePanel";
 import AnimatedButton from "../components/AnimatedButton";
 import LanguageToggle from "../components/LanguageToggle";
-import { CategoryChip, StatPill } from "../components/SmallWidgets";
+import GlassSurface from "../components/GlassSurface";
+import FeedbackOverlay from "../components/FeedbackOverlay";
+import { CategoryChip, StatBadge } from "../components/SmallWidgets";
+
+const CORRECT_SOUND = require("../../assets/sounds/correct.wav");
+const WRONG_SOUND = require("../../assets/sounds/wrong.wav");
 
 const DIFFICULTIES = ["easy", "medium", "hard"];
 const OPTION_COUNT = 4;
@@ -42,9 +48,13 @@ export default function GameScreen() {
 
   const [showHint, setShowHint] = useState(false);
   const [feedback, setFeedback] = useState(null); // "correct" | "wrong" | null
+  const [overlayVisible, setOverlayVisible] = useState(false);
   const [graded, setGraded] = useState(false);
   const [selected, setSelected] = useState(null);
   const toastAnim = React.useRef(new Animated.Value(0)).current;
+
+  const correctPlayer = useAudioPlayer(CORRECT_SOUND);
+  const wrongPlayer = useAudioPlayer(WRONG_SOUND);
 
   const options = useMemo(() => buildOptions(current, lang), [current, lang]);
 
@@ -54,26 +64,41 @@ export default function GameScreen() {
     setGraded(false);
     setFeedback(null);
     setSelected(null);
+    setOverlayVisible(false);
   };
 
   const handleHint = () => setShowHint((v) => !v);
 
-  const flashToast = useCallback(() => {
+  // Shows the verdict popup and leaves it up — it never dismisses itself
+  // on a timer. The riddle only advances when the user taps the button
+  // inside the popup (see handleContinueFeedback).
+  const flashFeedback = useCallback(() => {
     toastAnim.stopAnimation();
     toastAnim.setValue(0);
-    Animated.sequence([
-      Animated.timing(toastAnim, { toValue: 1, duration: 180, useNativeDriver: true }),
-      Animated.delay(900),
-      Animated.timing(toastAnim, { toValue: 0, duration: 220, useNativeDriver: true }),
-    ]).start();
+    setOverlayVisible(true);
+    Animated.spring(toastAnim, { toValue: 1, useNativeDriver: true, speed: 16, bounciness: 10 }).start();
   }, [toastAnim]);
+
+  const playFeedbackSound = useCallback(
+    async (wasCorrect) => {
+      const player = wasCorrect ? correctPlayer : wrongPlayer;
+      try {
+        await player.seekTo(0);
+        player.play();
+      } catch (e) {
+        // Sound is a nice-to-have; never let a playback hiccup break grading.
+      }
+    },
+    [correctPlayer, wrongPlayer]
+  );
 
   const handleGrade = (wasCorrect) => {
     if (graded) return;
     setGraded(true);
     setFeedback(wasCorrect ? "correct" : "wrong");
     recordAttempt(wasCorrect);
-    flashToast();
+    flashFeedback();
+    playFeedbackSound(wasCorrect);
   };
 
   const handleNext = () => {
@@ -81,7 +106,18 @@ export default function GameScreen() {
     setGraded(false);
     setFeedback(null);
     setSelected(null);
+    setOverlayVisible(false);
     nextRiddle();
+  };
+
+  // Tapping the button inside the popup: play a quick fade-out, then
+  // dismiss the popup and advance to the next riddle together.
+  const handleContinueFeedback = () => {
+    Animated.timing(toastAnim, { toValue: 0, duration: 160, useNativeDriver: true }).start(
+      ({ finished }) => {
+        if (finished) handleNext();
+      }
+    );
   };
 
   const handleSelectOption = (option) => {
@@ -108,22 +144,15 @@ export default function GameScreen() {
   const difficultyColor = COLORS.difficultyColors[current.difficulty] || COLORS.accent;
   const isFav = favorites.includes(current.id);
 
-  const toastTranslate = toastAnim.interpolate({ inputRange: [0, 1], outputRange: [-20, 0] });
-
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
       <View style={styles.header}>
-        <View>
-          <Text style={styles.appName}>{t.appName}</Text>
-          <Text style={styles.tagline}>{t.tagline}</Text>
+        <Text style={styles.appName}>{t.appName}</Text>
+        <View style={styles.headerRight}>
+          <StatBadge icon="trophy" value={stats.score} color={COLORS.accent} />
+          <StatBadge icon="flame" value={stats.streak} color={COLORS.success} />
+          <LanguageToggle />
         </View>
-        <LanguageToggle />
-      </View>
-
-      <View style={styles.statsRow}>
-        <StatPill label={t.score} value={stats.score} color={COLORS.accent} />
-        <View style={{ width: 10 }} />
-        <StatPill label={t.streak} value={stats.streak} color={COLORS.success} />
       </View>
 
       <View style={styles.chipRow}>
@@ -146,113 +175,107 @@ export default function GameScreen() {
         ))}
       </View>
 
-      <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-        {justReset && (
-          <Text style={styles.resetNotice}>{t.outOfIdeas}</Text>
-        )}
+      <View style={styles.body}>
+        <View style={styles.questionArea}>
+          {justReset && <Text style={styles.resetNotice}>{t.outOfIdeas}</Text>}
 
-        <RiddleCard
-          cardKey={current.id}
-          question={riddleText.q}
-          difficultyLabel={t[current.difficulty]}
-          difficultyColor={difficultyColor}
-          isFavorite={isFav}
-          onToggleFavorite={() => toggleFavorite(current.id)}
-          feedback={feedback}
-        />
+          <RiddleCard
+            cardKey={current.id}
+            question={riddleText.q}
+            difficultyLabel={t[current.difficulty]}
+            difficultyColor={difficultyColor}
+            isFavorite={isFav}
+            onToggleFavorite={() => toggleFavorite(current.id)}
+            feedback={feedback}
+          />
 
-        <AnswerOptions
-          options={options}
-          correctAnswer={riddleText.a}
-          selected={selected}
-          graded={graded}
-          onSelect={handleSelectOption}
-        />
-
-        <CollapsiblePanel
-          visible={showHint}
-          icon="💡"
-          label={t.showHint}
-          text={riddleText.hint}
-          tint={COLORS.accent}
-        />
-
-        <View style={[styles.actionRow, { marginTop: 12 }]}>
-          <AnimatedButton variant="ghost" style={styles.flexBtn} onPress={handleHint}>
-            {showHint ? t.hideHint : t.showHint}
-          </AnimatedButton>
-          {!graded && (
-            <>
-              <View style={{ width: 10 }} />
-              <AnimatedButton variant="outline" style={styles.flexBtn} onPress={handleGiveUp}>
-                {t.revealAnswer}
-              </AnimatedButton>
-            </>
-          )}
+          <AnswerOptions
+            options={options}
+            correctAnswer={riddleText.a}
+            selected={selected}
+            graded={graded}
+            onSelect={handleSelectOption}
+          />
         </View>
 
-        <AnimatedButton style={styles.nextBtn} onPress={handleNext}>
-          {t.nextRiddle} →
-        </AnimatedButton>
-      </ScrollView>
+        <View style={styles.controls}>
+          <CollapsiblePanel
+            visible={showHint}
+            icon="💡"
+            label={t.showHint}
+            text={riddleText.hint}
+            tint={COLORS.accent}
+          />
 
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          styles.toast,
-          {
-            opacity: toastAnim,
-            transform: [{ translateY: toastTranslate }],
-            backgroundColor: feedback === "correct" ? COLORS.success : COLORS.error,
-          },
-        ]}
-      >
-        <Text style={styles.toastText}>
-          {feedback === "correct" ? `+10 · ${t.correct}` : t.tryAgain}
-        </Text>
-      </Animated.View>
+          <GlassSurface
+            radius={20}
+            intensity={55}
+            fill="rgba(6,3,16,0.6)"
+            borderColor="rgba(255,255,255,0.14)"
+          >
+            <View style={styles.shelf}>
+              <View style={styles.actionRow}>
+                <AnimatedButton size="sm" variant="ghost" style={styles.flexBtn} onPress={handleHint}>
+                  {showHint ? t.hideHint : t.showHint}
+                </AnimatedButton>
+                {!graded && (
+                  <AnimatedButton size="sm" variant="outline" style={styles.flexBtn} onPress={handleGiveUp}>
+                    {t.revealAnswer}
+                  </AnimatedButton>
+                )}
+              </View>
+            </View>
+          </GlassSurface>
+        </View>
+      </View>
+
+      <FeedbackOverlay
+        visible={overlayVisible}
+        feedback={feedback}
+        label={feedback === "correct" ? `+10 · ${t.correct}` : t.tryAgain}
+        buttonLabel={t.nextRiddle}
+        anim={toastAnim}
+        onContinue={handleContinueFeedback}
+      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.bgBottom },
+  safe: { flex: 1, backgroundColor: "transparent" },
   loadingText: { color: COLORS.textSecondary, textAlign: "center", marginTop: 40 },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-start",
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 8,
+    alignItems: "center",
+    paddingHorizontal: SPACING.screenH,
+    paddingTop: 10,
+    paddingBottom: 10,
   },
-  appName: { color: COLORS.textPrimary, fontSize: 24, fontWeight: "800" },
-  tagline: { color: COLORS.textSecondary, fontSize: 12, marginTop: 2, maxWidth: 220 },
-  statsRow: { flexDirection: "row", paddingHorizontal: 20, marginTop: 8, marginBottom: 12 },
+  headerRight: { flexDirection: "row", alignItems: "center", gap: 6 },
+  appName: { color: COLORS.textPrimary, fontSize: 18, fontWeight: "800" },
   chipRow: {
     flexDirection: "row",
-    paddingHorizontal: 20,
-    marginBottom: 14,
-    gap: 8,
+    paddingHorizontal: SPACING.screenH,
+    marginBottom: 8,
+    gap: 6,
   },
   chipFlex: { flex: 1 },
-  body: { paddingHorizontal: 20, paddingBottom: 40 },
+  body: {
+    flex: 1,
+    paddingHorizontal: SPACING.screenH,
+    paddingTop: 10,
+    paddingBottom: 10,
+  },
+  questionArea: { flex: 1 },
+  controls: { position: "relative", marginTop: 12 },
+  shelf: { padding: 14 },
   resetNotice: {
     color: COLORS.textMuted,
-    fontSize: 12,
+    fontSize: 11,
     textAlign: "center",
-    marginBottom: 10,
+    marginBottom: 6,
   },
-  actionRow: { flexDirection: "row", marginTop: 16 },
+  actionRow: { flexDirection: "row", gap: 10 },
   flexBtn: { flex: 1 },
-  nextBtn: { marginTop: 20 },
-  toast: {
-    position: "absolute",
-    top: 10,
-    alignSelf: "center",
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 999,
-  },
-  toastText: { color: "#160B33", fontWeight: "800" },
 });

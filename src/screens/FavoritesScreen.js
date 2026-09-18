@@ -2,11 +2,12 @@ import React, { useCallback, useEffect, useState } from "react";
 import { View, Text, StyleSheet, FlatList, Pressable } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { COLORS } from "../theme/theme";
+import { COLORS, SPACING } from "../theme/theme";
 import { useLanguage } from "../context/LanguageContext";
 import { Storage } from "../storage/storage";
 import { RIDDLES } from "../data/riddles";
 import LanguageToggle from "../components/LanguageToggle";
+import GlassSurface from "../components/GlassSurface";
 
 export default function FavoritesScreen({ focusKey }) {
   const { t, lang } = useLanguage();
@@ -39,30 +40,31 @@ export default function FavoritesScreen({ focusKey }) {
 
       {items.length === 0 ? (
         <View style={styles.emptyWrap}>
-          <Ionicons name="star-outline" size={40} color={COLORS.textMuted} />
+          <Ionicons name="star-outline" size={32} color={COLORS.textMuted} />
           <Text style={styles.emptyText}>{t.noFavorites}</Text>
         </View>
       ) : (
         <FlatList
           data={items}
           keyExtractor={(item) => String(item.id)}
-          contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 30 }}
+          contentContainerStyle={styles.listContent}
           renderItem={({ item }) => {
             const isOpen = expandedId === item.id;
             const text = item[lang];
             const color = COLORS.difficultyColors[item.difficulty];
             return (
-              <Pressable
-                style={[styles.card, { borderColor: color + "44" }]}
-                onPress={() => setExpandedId(isOpen ? null : item.id)}
-              >
-                <View style={styles.cardTop}>
-                  <Text style={styles.question}>{text.q}</Text>
-                  <Pressable onPress={() => removeFavorite(item.id)} hitSlop={10}>
-                    <Ionicons name="star" size={20} color={COLORS.accent} />
-                  </Pressable>
-                </View>
-                {isOpen && <Text style={styles.answer}>{text.a}</Text>}
+              <Pressable onPress={() => setExpandedId(isOpen ? null : item.id)}>
+                <GlassSurface radius={18} intensity={34} borderColor={color + "55"} style={styles.cardWrap}>
+                  <View style={styles.card}>
+                    <View style={styles.cardTop}>
+                      <Text style={styles.question}>{text.q}</Text>
+                      <Pressable onPress={() => removeFavorite(item.id)} hitSlop={10}>
+                        <Ionicons name="star" size={16} color={COLORS.accent} />
+                      </Pressable>
+                    </View>
+                    {isOpen && <Text style={styles.answer}>{text.a}</Text>}
+                  </View>
+                </GlassSurface>
               </Pressable>
             );
           }}
@@ -73,25 +75,21 @@ export default function FavoritesScreen({ focusKey }) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.bgBottom },
+  safe: { flex: 1, backgroundColor: "transparent" },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 20,
+    paddingHorizontal: SPACING.screenH,
     paddingTop: 16,
     marginBottom: 16,
   },
   title: { color: COLORS.textPrimary, fontSize: 24, fontWeight: "800" },
   emptyWrap: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 40 },
   emptyText: { color: COLORS.textMuted, textAlign: "center", marginTop: 12, fontSize: 14 },
-  card: {
-    backgroundColor: COLORS.card,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1.5,
-  },
+  listContent: { paddingHorizontal: SPACING.screenH, paddingBottom: 20 },
+  cardWrap: { marginBottom: 12 },
+  card: { padding: 16 },
   cardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
   question: { color: COLORS.textPrimary, fontSize: 15, fontWeight: "600", flex: 1, marginRight: 10 },
   answer: { color: COLORS.success, marginTop: 10, fontSize: 14, fontWeight: "600" },

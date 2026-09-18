@@ -2,12 +2,13 @@ import React, { useEffect, useState, useCallback } from "react";
 import { View, Text, StyleSheet, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { COLORS } from "../theme/theme";
+import { COLORS, SPACING } from "../theme/theme";
 import { useLanguage } from "../context/LanguageContext";
 import { Storage, DEFAULT_STATS } from "../storage/storage";
 import { StatPill } from "../components/SmallWidgets";
 import AnimatedButton from "../components/AnimatedButton";
 import LanguageToggle from "../components/LanguageToggle";
+import GlassSurface from "../components/GlassSurface";
 import { RIDDLES } from "../data/riddles";
 
 export default function StatsScreen({ focusKey }) {
@@ -50,23 +51,22 @@ export default function StatsScreen({ focusKey }) {
       <View style={styles.grid}>
         <View style={styles.row}>
           <StatPill label={t.score} value={stats.score} color={COLORS.accent} />
-          <View style={{ width: 12 }} />
           <StatPill label={t.bestStreak} value={stats.bestStreak} color={COLORS.success} />
         </View>
-        <View style={{ height: 12 }} />
         <View style={styles.row}>
           <StatPill label={t.solved} value={stats.correctCount} color={COLORS.difficultyColors.medium} />
-          <View style={{ width: 12 }} />
           <StatPill label={t.accuracy} value={`${accuracy}%`} color={COLORS.difficultyColors.easy} />
         </View>
       </View>
 
-      <View style={styles.infoCard}>
-        <Ionicons name="library-outline" size={20} color={COLORS.textSecondary} />
-        <Text style={styles.infoText}>
-          {RIDDLES.length} {t.totalRiddles}
-        </Text>
-      </View>
+      <GlassSurface radius={16} intensity={32}>
+        <View style={styles.infoCard}>
+          <Ionicons name="library-outline" size={16} color={COLORS.textSecondary} />
+          <Text style={styles.infoText}>
+            {RIDDLES.length} {t.totalRiddles}
+          </Text>
+        </View>
+      </GlassSurface>
 
       <View style={{ flex: 1 }} />
 
@@ -78,7 +78,7 @@ export default function StatsScreen({ focusKey }) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.bgBottom, paddingHorizontal: 20 },
+  safe: { flex: 1, backgroundColor: "transparent", paddingHorizontal: SPACING.screenH },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -87,17 +87,13 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   title: { color: COLORS.textPrimary, fontSize: 24, fontWeight: "800" },
-  grid: { marginBottom: 20 },
-  row: { flexDirection: "row" },
+  grid: { marginBottom: 20, gap: 12 },
+  row: { flexDirection: "row", gap: 12 },
   infoCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: COLORS.card,
-    borderRadius: 16,
     padding: 16,
-    borderWidth: 1,
-    borderColor: COLORS.cardBorder,
   },
   infoText: { color: COLORS.textSecondary, marginLeft: 10, fontSize: 14 },
-  resetBtn: { marginBottom: 24 },
+  resetBtn: { marginBottom: 20 },
 });
